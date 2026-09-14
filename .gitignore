@@ -1,0 +1,22 @@
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+.env
+
+# Node
+node_modules/
+dist/
+build/
+.npm
+.env
+.env.local
+
+# Helm
+*.tgz
+.charts/
