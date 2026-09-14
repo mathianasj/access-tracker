@@ -1,0 +1,12 @@
+name: Frontend CI
+
+on:
+  push:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # TODO: Full implementation in M5 - build Docker image and push to quay.io
+      - run: echo "Skeleton - full implementation in M5"
