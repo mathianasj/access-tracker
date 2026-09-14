@@ -1,0 +1,45 @@
+{{- if .Values.monitoring.enabled -}}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "access-tracker.fullname" . }}-backend
+  labels:
+    {{- include "access-tracker.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+    monitoring.openshift.io/target: backend
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: access-tracker
+      app.kubernetes.io/component: backend
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scheme: http
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "access-tracker.fullname" . }}-frontend
+  labels:
+    {{- include "access-tracker.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+    monitoring.openshift.io/target: frontend
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: access-tracker
+      app.kubernetes.io/component: frontend
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scheme: http
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+{{- end }}

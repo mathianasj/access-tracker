@@ -60,9 +60,8 @@ describe('Request List Filtering', () => {
 
     it('should return all when search is empty', () => {
       const requesterSearch = '';
-      const filtered = requesterSearch
-        ? mockRequests.filter(r => r.requester.toLowerCase().includes(requesterSearch.toLowerCase()))
-        : mockRequests;
+      const search = requesterSearch.toLowerCase();
+      const filtered = mockRequests.filter(r => r.requester.toLowerCase().includes(search));
       expect(filtered.length).toBe(4);
     });
   });

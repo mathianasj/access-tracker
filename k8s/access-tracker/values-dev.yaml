@@ -3,19 +3,43 @@ backend:
   replicaCount: 1
   pullPolicy: Always
   port: 8080
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
 
 frontend:
   image: quay.io/mathianasj/access-tracker-frontend:latest
   replicaCount: 1
   pullPolicy: Always
   port: 80
+  resources:
+    limits:
+      cpu: 250m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
 
 postgresql:
   enabled: true
   auth:
     database: access_tracker
-    username: access_tracker
+    username: access_tracker_dev
     password: ""
+  primary:
+    persistence:
+      enabled: false
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
 
 service:
   backend:
@@ -28,10 +52,9 @@ service:
 ingress:
   enabled: true
   className: nginx
-  host: ""
+  host: dev.access-tracker.local
   tls:
-    enabled: true
-    clusterIssuer: letsencrypt-prod
+    enabled: false
 
-monitoring:
+autoscaling:
   enabled: false

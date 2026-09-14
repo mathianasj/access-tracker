@@ -5,6 +5,12 @@ metadata:
   labels:
     {{- include "access-tracker.labels" . | nindent 4 }}
     app.kubernetes.io/component: backend
+  {{- if .Values.monitoring.enabled }}
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "{{ .Values.service.backend.port }}"
+    prometheus.io/path: "/metrics"
+  {{- end }}
 spec:
   type: {{ .Values.service.backend.type }}
   ports:

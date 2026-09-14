@@ -4,11 +4,48 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'k8s/**'
+      - '.github/workflows/deploy.yml'
+      - 'backend/**'
+      - 'frontend/**'
+
+env:
+  IMAGE_TAG: ${{ github.sha }}
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # TODO: Full implementation in M5 - helm upgrade on main merge
-      - run: echo "Skeleton - full implementation in M5"
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: '3.14'
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubeconfig
+        run: |
+          echo "${{ secrets.KUBECONFIG }}" > kubeconfig
+          export KUBECONFIG=$PWD/kubeconfig
+          kubectl cluster-info
+
+      - name: Deploy with Helm
+        run: |
+          export KUBECONFIG=$PWD/kubeconfig
+          helm upgrade --install access-tracker \
+            ./k8s/access-tracker \
+            -f ./k8s/access-tracker/values-prod.yaml \
+            --namespace access-tracker \
+            --create-namespace \
+            --wait \
+            --timeout 10m
+
+      - name: Verify deployment
+        run: |
+          export KUBECONFIG=$PWD/kubeconfig
+          kubectl get pods -n access-tracker
+          kubectl get ingress -n access-tracker
