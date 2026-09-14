@@ -24,3 +24,11 @@ service:
   frontend:
     port: 80
     type: ClusterIP
+
+ingress:
+  enabled: true
+  className: nginx
+  host: ""
+  tls:
+    enabled: true
+    clusterIssuer: letsencrypt-prod
