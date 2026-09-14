@@ -1,0 +1,26 @@
+backend:
+  image: quay.io/mathianasj/access-tracker-server:latest
+  replicaCount: 1
+  pullPolicy: Always
+  port: 8080
+
+frontend:
+  image: quay.io/mathianasj/access-tracker-frontend:latest
+  replicaCount: 1
+  pullPolicy: Always
+  port: 80
+
+postgresql:
+  enabled: true
+  auth:
+    database: access_tracker
+    username: access_tracker
+    password: ""
+
+service:
+  backend:
+    port: 8080
+    type: ClusterIP
+  frontend:
+    port: 80
+    type: ClusterIP

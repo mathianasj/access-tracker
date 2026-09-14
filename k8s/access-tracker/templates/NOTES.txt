@@ -1,0 +1,16 @@
+Thank you for installing {{ .Chart.Name }}.
+
+Your release is named {{ .Release.Name }}.
+
+To learn more about the release, try:
+
+  $ helm status {{ .Release.Name }}
+  $ helm get all {{ .Release.Name }}
+
+To deploy with PostgreSQL:
+
+  $ kubectl get secret {{ .Release.Name }}-postgresql -o jsonpath='{.data.password}' | base64 -d
+
+To forward PostgreSQL locally:
+
+  $ kubectl port-forward svc/{{ .Release.Name }}-postgresql 5432:5432
