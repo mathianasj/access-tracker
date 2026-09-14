@@ -1,0 +1,51 @@
+scalar Time
+
+enum AccessLevel {
+  READ
+  WRITE
+  ADMIN
+}
+
+enum Status {
+  PENDING
+  APPROVED
+  DENIED
+}
+
+type AccessRequest {
+  id: ID!
+  requester: String!
+  systemResource: String!
+  accessLevel: AccessLevel!
+  justification: String
+  status: Status!
+  createdAt: Time!
+  updatedAt: Time!
+}
+
+input CreateAccessRequestInput {
+  requester: String!
+  systemResource: String!
+  accessLevel: AccessLevel!
+  justification: String
+}
+
+input UpdateAccessRequestStatusInput {
+  id: ID!
+  status: Status!
+}
+
+input AccessRequestFilter {
+  status: Status
+  requester: String
+}
+
+type Query {
+  accessRequest(id: ID!): AccessRequest
+  accessRequests(filter: AccessRequestFilter): [AccessRequest!]!
+}
+
+type Mutation {
+  createAccessRequest(input: CreateAccessRequestInput!): AccessRequest!
+  updateAccessRequestStatus(input: UpdateAccessRequestStatusInput!): AccessRequest!
+}

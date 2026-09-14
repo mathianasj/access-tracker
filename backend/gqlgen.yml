@@ -1,0 +1,31 @@
+schema:
+  - internal/graphql/schema.graphqls
+
+exec:
+  filename: internal/graphql/generated.go
+  package: graphql
+
+model:
+  filename: internal/graphql/models_gen.go
+  package: graphql
+
+resolver:
+  layout: follow-schema
+  dir: internal/graphql
+  package: graphql
+  filename_template: "{name}.resolvers.go"
+
+autobind:
+  - github.com/mathianasj/access-tracker/internal/models
+
+models:
+  ID:
+    model:
+      - github.com/99designs/gqlgen/graphql.ID
+  Time:
+    model:
+      - github.com/99designs/gqlgen/graphql.Time
+  AccessLevel:
+    model: github.com/mathianasj/access-tracker/internal/models.AccessLevel
+  Status:
+    model: github.com/mathianasj/access-tracker/internal/models.Status
