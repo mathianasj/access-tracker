@@ -22,6 +22,7 @@ const (
 
 type AccessRequest struct {
 	ID             string      `json:"id"`
+	RequestID      string      `json:"requestId"`
 	Requester      string      `json:"requester"`
 	SystemResource string      `json:"systemResource"`
 	AccessLevel    AccessLevel `json:"accessLevel"`

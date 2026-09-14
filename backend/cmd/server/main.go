@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/google/uuid"
 	"github.com/mathianasj/access-tracker/internal/db"
 	"github.com/mathianasj/access-tracker/internal/graphql"
 	"github.com/rs/zerolog"
@@ -35,17 +36,29 @@ func main() {
 	r := chi.NewRouter()
 
 	r.Use(middleware.Recoverer)
+	r.Use(requestIDMiddleware)
 	r.Use(requestLogger)
 
 	r.Get("/healthz", healthHandler(database))
-	r.Handle("/graphql", graphqlHandler)
+	r.Handle("/graphql", graphql.ContextMiddleware(graphqlHandler))
 
 	logger.Info().Msg("server starting on :8080")
 	http.ListenAndServe(":8080", r)
 }
 
+func requestIDMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestID := uuid.New().String()
+		ctx := context.WithValue(r.Context(), "request_id", requestID)
+		r = r.WithContext(ctx)
+		next.ServeHTTP(w, r)
+	})
+}
+
 func healthHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		requestID := getRequestID(r.Context())
+
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 
@@ -58,6 +71,7 @@ func healthHandler(database *db.DB) http.HandlerFunc {
 
 		if err := database.Ping(ctx); err != nil {
 			response.Status = "unhealthy"
+			logger.Error().Str("request_id", requestID).Str("component", "backend").Str("operation", "health_check").Err(err).Msg("health check failed")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusServiceUnavailable)
 			json.NewEncoder(w).Encode(response)
@@ -65,6 +79,7 @@ func healthHandler(database *db.DB) http.HandlerFunc {
 		}
 
 		response.Status = "healthy"
+		logger.Info().Str("request_id", requestID).Str("component", "backend").Str("operation", "health_check").Msg("health check passed")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(response)
@@ -91,16 +106,27 @@ func (rw *responseWriter) Write(b []byte) (int, error) {
 func requestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+		requestID := getRequestID(r.Context())
 
 		mw := &responseWriter{ResponseWriter: w, status: http.StatusOK}
-		next.ServeHTTP(mw, r)
+		next.ServeHTTP(w, r)
 
 		logger.Info().
+			Str("request_id", requestID).
 			Str("method", r.Method).
 			Str("path", r.URL.Path).
 			Int("status", mw.status).
 			Dur("duration", time.Since(start)).
 			Str("remote_addr", r.RemoteAddr).
+			Str("component", "backend").
+			Str("operation", "http_request").
 			Msg("request")
 	})
+}
+
+func getRequestID(ctx context.Context) string {
+	if requestID, ok := ctx.Value("request_id").(string); ok && requestID != "" {
+		return requestID
+	}
+	return "unknown"
 }

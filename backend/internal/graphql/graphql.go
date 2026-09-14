@@ -6,8 +6,10 @@ import (
 	"time"
 
 	"github.com/graphql-go/graphql"
+	"github.com/google/uuid"
 	"github.com/mathianasj/access-tracker/internal/db"
 	"github.com/mathianasj/access-tracker/internal/models"
+	"github.com/rs/zerolog/log"
 )
 
 var accessLevelEnum = graphql.NewEnum(graphql.EnumConfig{
@@ -32,6 +34,7 @@ var accessRequestType = graphql.NewObject(graphql.ObjectConfig{
 	Name: "AccessRequest",
 	Fields: graphql.Fields{
 		"id":             &graphql.Field{Type: graphql.NewNonNull(graphql.ID)},
+		"requestId":      &graphql.Field{Type: graphql.NewNonNull(graphql.ID)},
 		"requester":      &graphql.Field{Type: graphql.NewNonNull(graphql.String)},
 		"systemResource": &graphql.Field{Type: graphql.NewNonNull(graphql.String)},
 		"accessLevel":    &graphql.Field{Type: graphql.NewNonNull(accessLevelEnum)},
@@ -86,7 +89,9 @@ var queryType = graphql.NewObject(graphql.ObjectConfig{
 				"id": &graphql.ArgumentConfig{Type: graphql.NewNonNull(graphql.ID)},
 			},
 			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+				requestID := getRequestID(p.Context)
 				id := p.Args["id"].(string)
+				log.Info().Str("request_id", requestID).Str("operation", "getAccessRequest").Str("component", "graphql").Msg("resolving access request")
 				return p.Context.Value("resolver").(*Resolver).getAccessRequest(p.Context, id)
 			},
 		},
@@ -97,7 +102,9 @@ var queryType = graphql.NewObject(graphql.ObjectConfig{
 				"filter": &graphql.ArgumentConfig{Type: accessRequestFilterInput},
 			},
 			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+				requestID := getRequestID(p.Context)
 				filter, _ := p.Args["filter"].(map[string]interface{})
+				log.Info().Str("request_id", requestID).Str("operation", "getAccessRequests").Str("component", "graphql").Msg("listing access requests")
 				return p.Context.Value("resolver").(*Resolver).getAccessRequests(p.Context, filter)
 			},
 		},
@@ -115,6 +122,8 @@ var mutationType = graphql.NewObject(graphql.ObjectConfig{
 			},
 			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 				input := p.Args["input"].(map[string]interface{})
+				requestID := getRequestID(p.Context)
+				log.Info().Str("request_id", requestID).Str("operation", "createAccessRequest").Str("component", "graphql").Msg("creating access request")
 				return p.Context.Value("resolver").(*Resolver).createAccessRequest(p.Context, input)
 			},
 		},
@@ -126,6 +135,8 @@ var mutationType = graphql.NewObject(graphql.ObjectConfig{
 			},
 			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 				input := p.Args["input"].(map[string]interface{})
+				requestID := getRequestID(p.Context)
+				log.Info().Str("request_id", requestID).Str("operation", "updateAccessRequestStatus").Str("component", "graphql").Msg("updating access request status")
 				return p.Context.Value("resolver").(*Resolver).updateAccessRequestStatus(p.Context, input)
 			},
 		},
@@ -138,13 +149,16 @@ var Schema, _ = graphql.NewSchema(graphql.SchemaConfig{
 })
 
 func (r *Resolver) getAccessRequest(ctx context.Context, id string) (*models.AccessRequest, error) {
+	requestID := getRequestID(ctx)
+	log.Debug().Str("request_id", requestID).Str("operation", "getAccessRequest").Str("component", "db").Msg("querying database")
+
 	ar := &models.AccessRequest{}
 	err := r.DB.Pool.QueryRow(ctx, `
-		SELECT id, requester, system_resource, access_level, justification, status, created_at, updated_at
+		SELECT id, request_id, requester, system_resource, access_level, justification, status, created_at, updated_at
 		FROM access_requests
 		WHERE id = $1
 	`, id).Scan(
-		&ar.ID, &ar.Requester, &ar.SystemResource, &ar.AccessLevel, &ar.Justification, &ar.Status, &ar.CreatedAt, &ar.UpdatedAt,
+		&ar.ID, &ar.RequestID, &ar.Requester, &ar.SystemResource, &ar.AccessLevel, &ar.Justification, &ar.Status, &ar.CreatedAt, &ar.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -153,8 +167,11 @@ func (r *Resolver) getAccessRequest(ctx context.Context, id string) (*models.Acc
 }
 
 func (r *Resolver) getAccessRequests(ctx context.Context, filter map[string]interface{}) ([]*models.AccessRequest, error) {
+	requestID := getRequestID(ctx)
+	log.Debug().Str("request_id", requestID).Str("operation", "getAccessRequests").Str("component", "db").Msg("querying database")
+
 	query := `
-		SELECT id, requester, system_resource, access_level, justification, status, created_at, updated_at
+		SELECT id, request_id, requester, system_resource, access_level, justification, status, created_at, updated_at
 		FROM access_requests
 		WHERE 1=1
 	`
@@ -185,7 +202,7 @@ func (r *Resolver) getAccessRequests(ctx context.Context, filter map[string]inte
 	for rows.Next() {
 		ar := &models.AccessRequest{}
 		err := rows.Scan(
-			&ar.ID, &ar.Requester, &ar.SystemResource, &ar.AccessLevel, &ar.Justification, &ar.Status, &ar.CreatedAt, &ar.UpdatedAt,
+			&ar.ID, &ar.RequestID, &ar.Requester, &ar.SystemResource, &ar.AccessLevel, &ar.Justification, &ar.Status, &ar.CreatedAt, &ar.UpdatedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -197,7 +214,11 @@ func (r *Resolver) getAccessRequests(ctx context.Context, filter map[string]inte
 }
 
 func (r *Resolver) createAccessRequest(ctx context.Context, input map[string]interface{}) (*models.AccessRequest, error) {
+	requestID := getRequestID(ctx)
+	log.Debug().Str("request_id", requestID).Str("operation", "createAccessRequest").Str("component", "db").Msg("inserting into database")
+
 	ar := &models.AccessRequest{
+		RequestID:      requestID,
 		Requester:      input["requester"].(string),
 		SystemResource: input["systemResource"].(string),
 		AccessLevel:    input["accessLevel"].(models.AccessLevel),
@@ -211,10 +232,10 @@ func (r *Resolver) createAccessRequest(ctx context.Context, input map[string]int
 	}
 
 	err := r.DB.Pool.QueryRow(ctx, `
-		INSERT INTO access_requests (requester, system_resource, access_level, justification, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO access_requests (request_id, requester, system_resource, access_level, justification, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id
-	`, ar.Requester, ar.SystemResource, ar.AccessLevel, ar.Justification, ar.Status, ar.CreatedAt, ar.UpdatedAt).Scan(&ar.ID)
+	`, ar.RequestID, ar.Requester, ar.SystemResource, ar.AccessLevel, ar.Justification, ar.Status, ar.CreatedAt, ar.UpdatedAt).Scan(&ar.ID)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create access request: %w", err)
@@ -224,6 +245,9 @@ func (r *Resolver) createAccessRequest(ctx context.Context, input map[string]int
 }
 
 func (r *Resolver) updateAccessRequestStatus(ctx context.Context, input map[string]interface{}) (*models.AccessRequest, error) {
+	requestID := getRequestID(ctx)
+	log.Debug().Str("request_id", requestID).Str("operation", "updateAccessRequestStatus").Str("component", "db").Msg("updating database")
+
 	id := input["id"].(string)
 	status := input["status"].(models.Status)
 
@@ -232,9 +256,9 @@ func (r *Resolver) updateAccessRequestStatus(ctx context.Context, input map[stri
 		UPDATE access_requests
 		SET status = $1, updated_at = $2
 		WHERE id = $3
-		RETURNING id, requester, system_resource, access_level, justification, status, created_at, updated_at
+		RETURNING id, request_id, requester, system_resource, access_level, justification, status, created_at, updated_at
 	`, status, time.Now(), id).Scan(
-		&ar.ID, &ar.Requester, &ar.SystemResource, &ar.AccessLevel, &ar.Justification, &ar.Status, &ar.CreatedAt, &ar.UpdatedAt,
+		&ar.ID, &ar.RequestID, &ar.Requester, &ar.SystemResource, &ar.AccessLevel, &ar.Justification, &ar.Status, &ar.CreatedAt, &ar.UpdatedAt,
 	)
 
 	if err != nil {
@@ -242,4 +266,11 @@ func (r *Resolver) updateAccessRequestStatus(ctx context.Context, input map[stri
 	}
 
 	return ar, nil
+}
+
+func getRequestID(ctx context.Context) string {
+	if requestID, ok := ctx.Value("request_id").(string); ok && requestID != "" {
+		return requestID
+	}
+	return uuid.New().String()
 }
