@@ -1,526 +1,522 @@
 # Access Tracker Architecture
 
-## System Overview
-
-Access Tracker is a system for tracking and managing resource access permissions and logs. The system follows a client-server architecture with:
-
-- **Vue 3 Frontend** - Single Page Application (SPA)
-- **Go Backend** - REST API with GraphQL
-- **PostgreSQL** - Primary database
-- **Kubernetes** - Container orchestration
-- **Quay.io** - Container registry
-
-## Component Diagram
-
-```mermaid
-graph TB
-    subgraph "External"
-        User["👤 User Browser"]
-    end
-
-    subgraph "Kubernetes Cluster"
-        subgraph "access-tracker namespace"
-            Ingress["🌐 Ingress<br/>nginx-ingress"]
-            Frontend["📦 Frontend Pod<br/>Vue 3 SPA"]
-            Backend["⚙️ Backend Pod<br/>Go API Server"]
-            DB["🗄️ PostgreSQL<br/>Bitnami Chart"]
-        end
-
-        subgraph "Monitoring"
-            Prometheus["📊 Prometheus"]
-            Grafana["📈 Grafana"]
-        end
-    end
-
-    subgraph "External Services"
-        Quay["📦 Quay.io<br/>Container Registry"]
-        GitHub["🐙 GitHub<br/>CI/CD"]
-    end
-
-    User -->|HTTPS| Ingress
-    Ingress -->|/api| Backend
-    Ingress -->|/*| Frontend
-    Backend -->|GraphQL| DB
-    Frontend -->|HTTP| Backend
-    GitHub -->|Push Images| Quay
-    Prometheus -->|Scrape| Backend
-    Prometheus -->|Scrape| Frontend
-```
-
-## Request Flow Diagram
-
-```mermaid
-sequenceDiagram
-    participant User as 👤 User
-    participant Browser as 🌐 Browser
-    participant Ingress as 🌐 Ingress
-    participant Frontend as 📦 Frontend
-    participant Backend as ⚙️ Backend
-    participant DB as 🗄️ PostgreSQL
-
-    User->>Browser: Opens application
-    Browser->>Ingress: GET /
-    Ingress->>Frontend: Route to frontend pod
-    Frontend->>Browser: Returns SPA
-    Browser->>Frontend: User fills request form
-    Frontend->>Backend: POST /graphql mutation
-    Backend->>DB: INSERT access_request
-    DB-->>Backend: Return created record
-    Backend-->>Frontend: GraphQL response
-    Frontend-->>Browser: Update UI
-    Browser-->>User: Show confirmation
-```
-
-## CI/CD Pipeline
-
-```mermaid
-flowchart LR
-    subgraph "GitHub"
-        Push["🐙 Push to main"]
-        CI["✅ CI Workflows"]
-        CD["🚀 Deploy Workflow"]
-    end
-
-    subgraph "Build"
-        BackendImage["📦 Build Backend<br/>Dockerfile"]
-        FrontendImage["📦 Build Frontend<br/>Dockerfile"]
-    end
-
-    subgraph "Registry"
-        Quay["📦 Quay.io<br/>Container Registry"]
-    end
-
-    subgraph "Kubernetes"
-        Cluster["☸️ K8s Cluster"]
-        Helm["Helm Upgrade"]
-    end
-
-    Push --> CI
-    CI --> BackendImage
-    CI --> FrontendImage
-    BackendImage --> Quay
-    FrontendImage --> Quay
-    Push --> CD
-    CD --> Helm
-    Helm --> Cluster
-```
-
-## Data Model
-
-```mermaid
-erDiagram
-    USERS {
-        uuid id PK
-        string username
-        string password_hash
-        timestamptz created_at
-        timestamptz updated_at
-    }
-
-    ACCESS_REQUESTS {
-        uuid id PK
-        uuid request_id
-        string requester
-        string system_resource
-        string access_level
-        string justification
-        string status
-        timestamptz created_at
-        timestamptz updated_at
-    }
-
-    AUDIT_LOGS {
-        uuid id PK
-        uuid access_request_id FK
-        string action
-        string old_value
-        string new_value
-        string changed_by
-        timestamptz changed_at
-    }
-
-    USERS ||--o{ ACCESS_REQUESTS : "creates"
-    ACCESS_REQUESTS ||--o{ AUDIT_LOGS : "has"
-```
-
-## Frontend Architecture
-
-```mermaid
-graph TD
-    subgraph "Frontend Components"
-        App["📱 App.vue"]
-        Router["🔀 Vue Router"]
-        Store["📋 Pinia Store"]
-        Apollo["🔗 Apollo Client"]
-    end
-
-    subgraph "Pages"
-        Home["🏠 Home/Request List"]
-        Form["📝 Request Form"]
-    end
-
-    subgraph "Components"
-        RequestList["📋 RequestList"]
-        StatusBadge["🏷️ StatusBadge"]
-        AccessRequestForm["📄 AccessRequestForm"]
-    end
-
-    App --> Router
-    Router --> Home
-    Router --> Form
-    Home --> RequestList
-    Home --> StatusBadge
-    Form --> AccessRequestForm
-    RequestList --> Store
-    AccessRequestForm --> Store
-    Store --> Apollo
-    Apollo -->|GraphQL| Backend["⚙️ Backend API"]
-```
-
-## Backend Architecture
-
-```mermaid
-graph TD
-    subgraph "Go Backend"
-        Main["🚀 main.go"]
-        Router["🛣️ Chi Router"]
-        Middleware["🔧 Middleware"]
-        Auth["🔐 Auth Middleware"]
-        RequestID["🆔 Request ID"]
-        Logger["📝 Request Logger"]
-    end
-
-    subgraph "GraphQL Layer"
-        Handler["📡 GraphQL Handler"]
-        Schema["📋 Schema"]
-        Resolver["⚙️ Resolver"]
-        Query["📖 Query Resolvers"]
-        Mutation["✏️ Mutation Resolvers"]
-    end
-
-    subgraph "Data Layer"
-        DB["🗄️ Database"]
-        Pool["连接池 Pool"]
-    end
-
-    Main --> Router
-    Router --> Middleware
-    Middleware --> Auth
-    Middleware --> RequestID
-    Middleware --> Logger
-    Router --> Handler
-    Handler --> Schema
-    Handler --> Resolver
-    Resolver --> Query
-    Resolver --> Mutation
-    Mutation --> DB
-    Query --> DB
-    DB --> Pool
-```
-
-## Kubernetes Deployment
-
-```mermaid
-graph TB
-    subgraph "Kubernetes Cluster"
-        subgraph "access-tracker Namespace"
-            subgraph "Services"
-                Ingress["🌐 Ingress<br/>:80/:443"]
-                SvcFrontend["⚙️ Service: Frontend<br/>ClusterIP :80"]
-                SvcBackend["⚙️ Service: Backend<br/>ClusterIP :8080"]
-                SvcDB["⚙️ Service: PostgreSQL<br/>ClusterIP :5432"]
-            end
-
-            subgraph "Deployments"
-                DeployFrontend["📦 Frontend<br/>replicas: 2"]
-                DeployBackend["📦 Backend<br/>replicas: 2"]
-                DeployDB["📦 PostgreSQL<br/>StatefulSet"]
-            end
-
-            subgraph "Config"
-                ConfigMap["📋 ConfigMap<br/>DB URL, GraphQL endpoint"]
-                Secret["🔒 Secret<br/>DB credentials"]
-            end
-
-            subgraph "Autoscaling"
-                HPAFrontend["📈 HPA Frontend<br/>min: 2, max: 10"]
-                HPABackend["📈 HPA Backend<br/>min: 2, max: 10"]
-            end
-
-            subgraph "Monitoring"
-                SMBackend["📊 ServiceMonitor<br/>Backend"]
-                SMFrontend["📊 ServiceMonitor<br/>Frontend"]
-            end
-        end
-    end
-
-    Ingress --> SvcFrontend
-    Ingress --> SvcBackend
-    SvcFrontend --> DeployFrontend
-    SvcBackend --> DeployBackend
-    SvcDB --> DeployDB
-    DeployBackend --> ConfigMap
-    DeployBackend --> Secret
-    DeployBackend --> DeployDB
-    HPAFrontend -.-> DeployFrontend
-    HPABackend -.-> DeployBackend
-    SMBackend -.-> SvcBackend
-    SMFrontend -.-> SvcFrontend
-```
-
-## Environment Configuration
+## Quick Reference: What Talks to What
 
 ```mermaid
 graph LR
-    subgraph "Development"
-        DevVals["values-dev.yaml"]
-        DevDB["ephemeral PostgreSQL"]
-        DevTLS["TLS disabled"]
-        DevReplica["replicas: 1"]
+    User["👤 Browser"] -->|HTTPS| Ingress["🌐 Ingress"]
+    Ingress -->|/api/*| Backend["⚙️ Go Backend<br/>:8080"]
+    Ingress -->|/*| Frontend["📦 Vue SPA<br/>:80"]
+    Frontend -->|GraphQL| Backend
+    Backend -->|SQL| PostgreSQL["🗄️ PostgreSQL<br/>:5432"]
+    GitHubActions["🐙 GitHub Actions"] -->|docker push| Quay["📦 Quay.io"]
+    Quay -->|docker pull| K8s["☸️ K8s Cluster"]
+    Prometheus["📊 Prometheus"] -->|scrape| Backend
+    Prometheus -->|scrape| Frontend
+```
+
+**Connection Summary:**
+
+| From | To | Protocol | Purpose |
+|------|-----|----------|---------|
+| Browser | Ingress | HTTPS | User traffic |
+| Ingress | Frontend Pod | HTTP | Serve SPA |
+| Ingress | Backend Pod | HTTP | Proxy /api/* |
+| Frontend | Backend | HTTP/GraphQL | API calls |
+| Backend | PostgreSQL | SQL | Data persistence |
+| GitHub | Quay | HTTPS | Container registry |
+| Prometheus | Backend | HTTP | Metrics scraping |
+
+## 1. Architecture Overview (2-4 min)
+
+### System Purpose
+
+Access Tracker manages resource access permissions with:
+- **Requesters** submit access requests
+- **Approvers** review and approve/deny requests
+- **System** maintains audit trail of all changes
+
+### Why These Tools?
+
+```mermaid
+flowchart TD
+    subgraph "Frontend Choices"
+        Vue["Vue 3"] --> VueWhy["Component-based SPA<br/>TypeScript support<br/>Fast reactivity"]
+        Apollo["Apollo Client"] --> ApolloWhy["Native GraphQL support<br/>Caching built-in"]
     end
 
-    subgraph "Production"
-        ProdVals["values-prod.yaml"]
-        ProdDB["persistent PostgreSQL<br/>10Gi PVC"]
-        ProdTLS["TLS enabled<br/>Let's Encrypt"]
-        ProdReplica["replicas: 2+"]
-        ProdHPA["HPA enabled"]
+    subgraph "Backend Choices"
+        Go["Go"] --> GoWhy["Single binary<br/>Fast startup<br/>Native concurrency"]
+        Chi["Chi Router"] --> ChiWhy["Lightweight<br/>Standard library compatible"]
+        GraphQL["GraphQL"] --> GraphQLWhy["Flexible queries<br/>Single endpoint<br/>Schema-first"]
     end
 
-    DevVals -.->|override| BaseVals["values.yaml"]
-    ProdVals -.->|override| BaseVals
+    subgraph "Infrastructure Choices"
+        K8s["Kubernetes"] --> K8sWhy["Auto-scaling<br/>Self-healing<br/>Rolling updates"]
+        Helm["Helm"] --> HelmWhy["Versioned configs<br/>Environment promotion"]
+        PostgreSQL["PostgreSQL"] --> PGWhy["ACID compliant<br/>Bitnami chart<br/>JSON support"}
+        Quay["Quay.io"] --> QuayWhy["Image scanning<br/>GitHub integration"]
+    end
 ```
 
-## Tool Selection Rationale
+**Key Decisions:**
 
-### Go (Backend)
+1. **Go over other languages**: Single binary deployment to K8s, fast boot time, excellent concurrency
+2. **GraphQL over REST**: Frontend can request exact fields, single endpoint simplifies routing
+3. **Vue over React**: Cleaner `<script setup>` syntax, less boilerplate
+4. **K8s over raw Docker**: HPA for scaling, self-healing, rolling deploys
+5. **Quay over Docker Hub**: Built-in vulnerability scanning, better GitHub Actions integration
 
-| Reason | Benefit |
-|--------|---------|
-| Performance | Excellent for API workloads with minimal memory footprint |
-| Concurrency | Built-in goroutines for handling multiple simultaneous connections |
-| Deployment | Single binary deployment simplifies Kubernetes operations |
-| Tooling | Mature ecosystem for web services |
+---
 
-### Vue 3 (Frontend)
+## 2. Live Walkthrough: Request End-to-End (3-5 min)
 
-| Reason | Benefit |
-|--------|---------|
-| Developer Experience | Clean `<script setup>` syntax |
-| Reactivity | Efficient UI state management |
-| TypeScript | First-class integration improves code quality |
-| Ecosystem | Mature router, state management, build tooling (Vite) |
-
-### GraphQL (API)
-
-| Reason | Benefit |
-|--------|---------|
-| Flexible Queries | Clients request exactly the data they need |
-| Type Safety | Schema-first development catches errors early |
-| Single Endpoint | Simplifies frontend-backend communication |
-| Tooling | GraphiQL provides excellent developer experience |
-
-### PostgreSQL (Database)
-
-| Reason | Benefit |
-|--------|---------|
-| Reliability | ACID compliance and data integrity |
-| Bitnami Chart | Easy Kubernetes deployment |
-| Performance | Excellent read/write performance |
-
-### Kubernetes + Helm (Infrastructure)
-
-| Reason | Benefit |
-|--------|---------|
-| Orchestration | Deployment, scaling, health management |
-| Helm | Reproducible, versioned deployments |
-| HPA | Supports 10x traffic scaling |
-| Ingress + Cert-Manager | Automatic TLS |
-
-### Quay.io (Container Registry)
-
-| Reason | Benefit |
-|--------|---------|
-| Security | Image scanning and vulnerability detection |
-| GitHub Actions | Excellent CI/CD integration |
-
-## Project Structure
-
-```
-access-tracker/
-├── backend/
-│   ├── cmd/server/
-│   │   └── main.go           # Entry point, router setup
-│   └── internal/
-│       ├── auth/
-│       │   └── auth.go       # JWT + bcrypt utilities
-│       ├── db/
-│       │   └── conn.go       # PostgreSQL connection pool
-│       ├── graphql/
-│       │   ├── graphql.go    # Schema, resolvers
-│       │   └── server.go     # GraphQL handler
-│       └── models/
-│           ├── access_request.go
-│           └── user.go        # User + AuditLog models
-├── frontend/
-│   └── src/
-│       ├── components/
-│       │   ├── AccessRequestForm.vue
-│       │   ├── RequestList.vue
-│       │   └── StatusBadge.vue
-│       ├── apollo.ts         # Apollo/GraphQL client
-│       ├── router.ts         # Vue Router config
-│       └── main.ts           # Entry point
-├── k8s/access-tracker/
-│   ├── values.yaml           # Base values
-│   ├── values-dev.yaml       # Dev overrides
-│   ├── values-prod.yaml     # Prod overrides
-│   └── templates/
-│       ├── deployment-backend.yaml
-│       ├── deployment-frontend.yaml
-│       ├── service-backend.yaml
-│       ├── service-frontend.yaml
-│       ├── ingress.yaml
-│       ├── configmap.yaml
-│       ├── hpa.yaml          # HorizontalPodAutoscaler
-│       └── servicemonitor.yaml # Prometheus
-├── .github/
-│   ├── workflows/
-│   │   ├── backend-ci.yml
-│   │   ├── frontend-ci.yml
-│   │   ├── deploy.yml
-│   │   └── codeql.yml
-│   └── dependabot.yml
-└── docs/
-    ├── architecture.md
-    ├── runbook.md
-    └── scaling.md
-```
-
-## API Reference
-
-### GraphQL Queries
-
-```graphql
-# Get all access requests with optional filter
-query GetAccessRequests($filter: AccessRequestFilter) {
-  accessRequests(filter: $filter) {
-    id
-    requestId
-    requester
-    systemResource
-    accessLevel
-    justification
-    status
-    createdAt
-    updatedAt
-  }
-}
-
-# Get audit logs for an access request
-query GetAuditLogs($accessRequestId: ID!) {
-  auditLogs(accessRequestId: $accessRequestId) {
-    id
-    action
-    oldValue
-    newValue
-    changedBy
-    changedAt
-  }
-}
-```
-
-### GraphQL Mutations
-
-```graphql
-# Login and get JWT token
-mutation Login($input: LoginInput!) {
-  login(input: $input) {
-    token
-    username
-  }
-}
-
-# Create new access request
-mutation CreateAccessRequest($input: CreateAccessRequestInput!) {
-  createAccessRequest(input: $input) {
-    id
-    requestId
-    status
-  }
-}
-
-# Update request status (creates audit log)
-mutation UpdateStatus($input: UpdateAccessRequestStatusInput!) {
-  updateAccessRequestStatus(input: $input) {
-    id
-    status
-  }
-}
-```
-
-## Security
-
-### Authentication Flow
+### Trace a Create Request
 
 ```mermaid
 sequenceDiagram
-    participant User as 👤 User
-    participant Frontend as 📦 Frontend
-    participant Backend as ⚙️ Backend
+    participant B as 👤 Browser
+    participant F as 📦 Vue SPA
+    participant I as 🌐 Ingress
+    participant BE as ⚙️ Go Backend
     participant DB as 🗄️ PostgreSQL
 
-    User->>Frontend: Enter credentials
-    Frontend->>Backend: mutation login(username, password)
-    Backend->>DB: SELECT password_hash WHERE username=?
-    DB-->>Backend: password_hash
-    Backend->>Backend: bcrypt.Compare(password, hash)
-    Backend->>Backend: jwt.Sign(username)
-    Backend-->>Frontend: { token, username }
-    Frontend-->>User: Store token, logged in
-
-    Note over User,Backend: Subsequent requests include Authorization header
-    Frontend->>Backend: GET /graphql + Authorization: Bearer <token>
-    Backend->>Backend: jwt.Validate(token)
-    Backend-->>Frontend: GraphQL response
+    B->>F: Fill form: requester, resource, access level
+    F->>I: POST /api/graphql
+    I->>BE: Forward GraphQL mutation
+    BE->>BE: Validate JWT token
+    BE->>BE: Parse GraphQL mutation
+    BE->>DB: INSERT access_request
+    DB->>DB: Write to table
+    DB-->>BE: RETURNING id
+    BE->>DB: INSERT audit_logs (CREATED)
+    BE-->>I: GraphQL response
+    I-->>F: HTTP 200 + JSON
+    F->>F: Update Pinia store
+    F->>B: Show success toast
 ```
 
-### Password Security
+### Code Path Trace
 
-- Passwords hashed with **bcrypt** (cost factor 10)
-- Tokens signed with **JWT** (HS256)
-- `JWT_SECRET` environment variable required in production
+**Frontend:**
+```
+src/components/AccessRequestForm.vue
+  → apollo.ts (Apollo Client)
+    → POST /graphql { query: createAccessRequest }
+```
 
-## Monitoring
+**Backend:**
+```
+cmd/server/main.go
+  → chi.Router.Handle("/graphql")
+    → graphql.ContextMiddleware (add username to ctx)
+    → graphql/server.go Handler
+      → Schema.Exec()
+        → Resolver.createAccessRequest()
+          → Pool.QueryRow("INSERT INTO access_requests")
+          → Pool.Exec("INSERT INTO audit_logs")
+```
 
-### Metrics Endpoint
+### Trace a Status Update
 
-The backend exposes metrics at `/metrics` for Prometheus scraping:
+```mermaid
+sequenceDiagram
+    participant B as 👤 Browser
+    participant F as 📦 Vue SPA
+    participant BE as ⚙️ Go Backend
+    participant DB as 🗄️ PostgreSQL
+
+    B->>F: Click "Approve"
+    F->>BE: mutation updateAccessRequestStatus(id, APPROVED)
+    BE->>DB: SELECT status FROM access_requests WHERE id=?
+    Note over BE,DB: oldStatus = "PENDING"
+    BE->>DB: UPDATE access_requests SET status='APPROVED'
+    BE->>DB: INSERT audit_logs (STATUS_CHANGED, PENDING → APPROVED)
+    DB-->>BE: Updated row
+    BE-->>F: { status: APPROVED }
+    F->>B: Badge turns green
+```
+
+---
+
+## 3. Deployment Narrative: Troubleshooting (3-5 min)
+
+### Common Failure Scenarios
+
+```mermaid
+flowchart TD
+    subgraph "Diagnose"
+        Check["🔍 kubectl get pods"]
+        Events["📋 kubectl describe pod"]
+        Logs["📝 kubectl logs"]
+    end
+
+    subgraph "Failures"
+        Image["🖼️ ImagePullBackOff"]
+        Probe["❤️ Liveness probe failed"]
+        DB["💾 Database connection"]
+        TLS["🔒 Certificate issue"]
+    end
+
+    Check --> Events
+    Events --> Logs
+    Logs --> Image
+    Logs --> Probe
+    Logs --> DB
+```
+
+### Runbook Quick Reference
+
+| Symptom | Command | Likely Cause |
+|---------|---------|--------------|
+| Pods stuck Pending | `kubectl describe pod` | Resource constraints, image pull |
+| CrashLoopBackOff | `kubectl logs --previous` | App crash, bad env var |
+| 404 from Ingress | `kubectl get endpoints` | Service has no pods |
+| 503 from backend | `kubectl exec curl localhost:8080/healthz` | App unhealthy |
+| TLS errors | `kubectl describe certificate` | cert-manager issue |
+
+### Specific Scenario: Backend Pod CrashLoopBackOff
 
 ```bash
-# Prometheus Operator scrapes ServiceMonitor
-oc get servicemonitor -n access-tracker
+# 1. Identify the problem
+kubectl get pods -n access-tracker
+NAME                                READY   STATUS             RESTARTS   AGE
+access-tracker-backend-7d8f9c6b5-xkq2l   0/1     CrashLoopBackOff   3          45s
 
-# View metrics directly
-kubectl exec -it <backend-pod> -n access-tracker -- wget -O- http://localhost:8080/metrics
+# 2. Get details
+kubectl describe pod access-tracker-backend-7d8f9c6b5-xkq2l -n access-tracker
+Events:
+  Type     Reason     Age   From               Message
+  ----     ------     ----  ----               -------
+  Warning  BackOff    10s   kubelet            Back-off restarting failed container
+
+# 3. Check logs
+kubectl logs access-tracker-backend-7d8f9c6b5-xkq2l -n access-tracker --previous
+Error: failed to connect to database: connection refused
+
+# 4. Root cause: PostgreSQL not ready yet
+kubectl get pods -n access-tracker -l app.kubernetes.io/name=postgresql
+NAME                              READY   STATUS    RESTARTS   AGE
+access-tracker-postgresql-0       0/1     Running   0          15s
+
+# 5. Solution: Wait for PostgreSQL, then restart backend
+kubectl rollout restart deployment/access-tracker-backend -n access-tracker
 ```
 
-### Health Checks
+**Key Insight:** Kubernetes starts pods in parallel - backend may start before PostgreSQL is ready. HPA and health checks handle this in production.
 
-| Probe | Endpoint | Purpose |
-|-------|----------|---------|
-| Liveness | `/healthz` | Pod is alive |
-| Readiness | `/healthz` | Pod can serve traffic |
-| Startup | `/healthz` | Application initialized |
+---
 
-### Log Aggregation
+## 4. Monitoring Demo (2-4 min)
 
-Logs are written to stdout and collected by OpenShift aggregated logging:
+### Where to Look
+
+```mermaid
+flowchart LR
+    subgraph "User Symptom"
+        Browser["👤 Browser shows error"]
+    end
+
+    subgraph "Find the Problem"
+        Route["🌐 Check Ingress route"]
+        Pods["📦 Check Pods"]
+        Logs["📝 Check Logs"]
+        Metrics["📊 Check Metrics"]
+    end
+
+    subgraph "Tools"
+        Openshift["🖥️ OpenShift Console"]
+        CLI["⌨️ kubectl"]
+        Prometheus["📈 Prometheus"]
+        Grafana["📉 Grafana"]
+    end
+
+    Browser --> Route
+    Route --> Openshift
+    Pods --> CLI
+    Logs --> Openshift
+    Metrics --> Prometheus
+    Metrics --> Grafana
+```
+
+### Demo Sequence
+
+**1. OpenShift Console → Observe**
+- See all pods, their status, CPU/memory
+- Click any pod for details
+
+**2. Prometheus Queries**
+
+```promql
+# Is the backend healthy?
+up{service="access-tracker-backend"}
+
+# Error rate
+rate(http_requests_total{status=~"5.."}[5m])
+
+# Latency p99
+histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m]))
+
+# Pod CPU usage
+pod:container_cpu_usage_seconds_total:sum{namespace="access-tracker"}
+```
+
+**3. View Logs**
 
 ```bash
-# View logs via CLI
-kubectl logs -l app.kubernetes.io/component=backend -n access-tracker -f
+# All backend logs in real-time
+kubectl logs -l app.kubernetes.io/component=backend -n access-tracker -f --timestamps
 
-# Via OpenShift Console
-# Observe -> Logging
+# Search for errors
+kubectl logs -l app.kubernetes.io/component=backend -n access-tracker | grep ERROR
 ```
+
+**4. Check Health Endpoint**
+
+```bash
+kubectl exec -it <backend-pod> -n access-tracker -- wget -O- http://localhost:8080/healthz
+```
+
+### Alerting
+
+Prometheus alerts fire when:
+- Backend pod down > 1 minute
+- Error rate > 1% for 5 minutes
+- CPU > 90% for 10 minutes
+
+Alertmanager routes to Slack/PagerDuty based on severity.
+
+---
+
+## 5. Forward-Looking: Scaling & Integration (2-4 min)
+
+### 10x Traffic Scaling Path
+
+```mermaid
+flowchart TD
+    subgraph "Current State"
+        BE1["⚙️ Backend x2"]
+        FE1["📦 Frontend x2"]
+        DB1["🗄️ PostgreSQL x1"]
+    end
+
+    subgraph "10x Scale"
+        BE2["⚙️ Backend x8"]
+        FE2["📦 Frontend x4"]
+        DB2["🗄️ PostgreSQL<br/>+ 2 Read Replicas"]
+        Cache["💨 Redis Cache"]
+        LB["⚖️ Load Balancer"]
+    end
+
+    subgraph "Future"
+        HPA["📈 HPA"]
+        VPA["📈 VPA"]
+        PA["📊 Pod Disruption Budget"]
+    end
+
+    BE1 -->|HPA| BE2
+    FE1 -->|HPA| FE2
+    DB1 -->|replication| DB2
+    BE2 --> Cache
+    Cache -->|cache reads| DB2
+```
+
+### Database Connection Pooling
+
+PostgreSQL has ~100 connection limit. At 10x:
+- Backend pods: 8 × ~10 conn = 80 connections
+- Risk: connection exhaustion
+
+**Solution: pgBouncer**
+
+```yaml
+# Add as sidecar to backend
+containers:
+  - name: pgbouncer
+    image: edoburu/pgbouncer:latest
+    env:
+      - name: DATABASE_URL
+        value: "postgres://user:pass@localhost:5432/access_tracker"
+      - name: POOL_MODE
+        value: "transaction"
+      - name: MAX_CLIENT_CONN
+        value: "500"
+```
+
+Backend connects to `localhost:5432` (pgBouncer), pgBouncer connects to PostgreSQL with pooled connections.
+
+### SSO Integration Path
+
+```mermaid
+flowchart LR
+    subgraph "Current"
+        FE["📦 Frontend"]
+        BE["⚙️ Backend"]
+    end
+
+    subgraph "With SSO"
+        Keycloak["🔐 Keycloak<br/>OIDC Provider"]
+        FE2["📦 Frontend +<br/>oidc-client"]
+        BE2["⚙️ Backend +<br/>JWT Validation"]
+    end
+
+    User["👤 User"] -->|Login| Keycloak
+    Keycloak -->|Access Token| FE2
+    FE2 -->|Forward Bearer| BE2
+    BE2 -->|Validate| Keycloak
+```
+
+**Changes needed:**
+1. Frontend: Add `oidc-client-js`, redirect to Keycloak
+2. Backend: Validate JWT from Keycloak, extract user info
+3. GraphQL: Add `requireAuth` directive
+
+### Multi-Region Deployment
+
+```mermaid
+flowchart LR
+    subgraph "Region US-East"
+        FE1["📦 Frontend"]
+        BE1["⚙️ Backend"]
+        DB1["🗄️ PostgreSQL Primary"]
+    end
+
+    subgraph "Region EU-West"
+        FE2["📦 Frontend"]
+        BE2["⚙️ Backend"]
+        DB2["🗄️ PostgreSQL Read Replica"]
+    end
+
+    subgraph "Traffic"
+        DNS["🌍 Route 53"]
+        LB["⚖️ Global LB"]
+    end
+
+    DNS --> LB
+    LB --> FE1
+    LB --> FE2
+    BE1 -->|write| DB1
+    BE2 -->|read| DB2
+    DB1 -->|replication| DB2
+```
+
+### API Versioning Strategy
+
+```graphql
+# Current (v1)
+POST /api/graphql
+
+# Future (v2) - Breaking changes
+POST /v2/api/graphql
+
+# Ingress routes by path
+/api/*     → backend-v1
+/v2/api/*  → backend-v2
+```
+
+---
+
+## Component Details
+
+### Frontend (Vue 3 SPA)
+
+**What it does:**
+- Serves the UI at `/`
+- Communicates with backend via GraphQL at `/api/graphql`
+- Maintains local state with Pinia
+- Apollo Client handles GraphQL and caching
+
+**Key files:**
+```
+frontend/src/
+├── components/
+│   ├── AccessRequestForm.vue   # Create request form
+│   ├── RequestList.vue         # List with filters
+│   └── StatusBadge.vue         # Status display
+├── apollo.ts                   # Apollo Client setup
+├── router.ts                   # Vue Router config
+└── main.ts                     # App entry point
+```
+
+### Backend (Go + GraphQL)
+
+**What it does:**
+- Handles all `/api/graphql` requests
+- Validates JWT tokens from `Authorization: Bearer <token>`
+- Writes to PostgreSQL
+- Creates audit log entries on changes
+
+**Key files:**
+```
+backend/
+├── cmd/server/main.go          # Entry point, router
+└── internal/
+    ├── auth/auth.go            # JWT + bcrypt
+    ├── db/conn.go              # PostgreSQL pool
+    ├── graphql/
+    │   ├── graphql.go          # Schema, resolvers
+    │   └── server.go           # Handler
+    └── models/
+        ├── access_request.go   # Request model
+        └── user.go             # User + AuditLog
+```
+
+### Kubernetes Deployment
+
+**What it does:**
+- Runs frontend and backend as Deployments
+- PostgreSQL via Bitnami StatefulSet
+- Ingress routes traffic
+- HPA scales pods based on CPU/memory
+- ServiceMonitors expose metrics to Prometheus
+
+**Key files:**
+```
+k8s/access-tracker/
+├── values.yaml                 # Base config
+├── values-dev.yaml             # Dev overrides
+├── values-prod.yaml            # Prod overrides
+└── templates/
+    ├── deployment-*.yaml       # Pod specs
+    ├── service-*.yaml          # ClusterIP services
+    ├── ingress.yaml             # Routing
+    ├── hpa.yaml                 # Autoscaling
+    └── servicemonitor.yaml      # Prometheus
+```
+
+---
+
+## Environment Differences
+
+| Setting | Development | Production |
+|---------|-------------|------------|
+| Replicas | 1 | 2+ |
+| TLS | Disabled | Let's Encrypt |
+| Persistence | EmptyDir | 10Gi PVC |
+| Autoscaling | Disabled | HPA enabled |
+| Resource Limits | 512Mi | 1Gi |
+| Monitoring | Disabled | ServiceMonitors |
+
+---
+
+## API Reference
+
+### GraphQL Schema Summary
+
+**Queries:**
+- `accessRequests(filter)` → List requests
+- `accessRequest(id)` → Single request
+- `auditLogs(accessRequestId)` → History
+
+**Mutations:**
+- `login(username, password)` → JWT token
+- `createAccessRequest(input)` → New request
+- `updateAccessRequestStatus(input)` → Change status
+
+### Environment Variables
+
+| Variable | Purpose | Required |
+|----------|---------|----------|
+| `DATABASE_URL` | PostgreSQL connection string | Yes |
+| `JWT_SECRET` | Token signing secret | Prod |
+| `GRAPHQL_ENDPOINT` | Backend URL for frontend | Frontend |
