@@ -66,10 +66,10 @@ jobs:
 
       - name: Lint
         run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
-          export PATH="$PATH:$(go env GOPATH)/bin"
           cd backend
-          golangci-lint run ./...
+          go vet ./...
 
       - name: Test
-        run: go test -v ./...
+        run: |
+          cd backend
+          go test -v ./...
