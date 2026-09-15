@@ -7,6 +7,7 @@ import (
 
 	"github.com/graphql-go/graphql"
 	"github.com/google/uuid"
+	"github.com/mathianasj/access-tracker/internal/auth"
 	"github.com/mathianasj/access-tracker/internal/db"
 	"github.com/mathianasj/access-tracker/internal/models"
 	"github.com/rs/zerolog/log"
@@ -45,6 +46,27 @@ var accessRequestType = graphql.NewObject(graphql.ObjectConfig{
 	},
 })
 
+var auditLogType = graphql.NewObject(graphql.ObjectConfig{
+	Name: "AuditLog",
+	Fields: graphql.Fields{
+		"id":              &graphql.Field{Type: graphql.NewNonNull(graphql.ID)},
+		"accessRequestId": &graphql.Field{Type: graphql.NewNonNull(graphql.ID)},
+		"action":          &graphql.Field{Type: graphql.NewNonNull(graphql.String)},
+		"oldValue":        &graphql.Field{Type: graphql.String},
+		"newValue":        &graphql.Field{Type: graphql.String},
+		"changedBy":       &graphql.Field{Type: graphql.NewNonNull(graphql.String)},
+		"changedAt":       &graphql.Field{Type: graphql.NewNonNull(graphql.DateTime)},
+	},
+})
+
+var authPayloadType = graphql.NewObject(graphql.ObjectConfig{
+	Name: "AuthPayload",
+	Fields: graphql.Fields{
+		"token":    &graphql.Field{Type: graphql.NewNonNull(graphql.String)},
+		"username": &graphql.Field{Type: graphql.NewNonNull(graphql.String)},
+	},
+})
+
 var createAccessRequestInput = graphql.NewInputObject(graphql.InputObjectConfig{
 	Name: "CreateAccessRequestInput",
 	Fields: graphql.InputObjectConfigFieldMap{
@@ -60,6 +82,14 @@ var updateAccessRequestStatusInput = graphql.NewInputObject(graphql.InputObjectC
 	Fields: graphql.InputObjectConfigFieldMap{
 		"id":     &graphql.InputObjectFieldConfig{Type: graphql.NewNonNull(graphql.ID)},
 		"status": &graphql.InputObjectFieldConfig{Type: graphql.NewNonNull(statusEnum)},
+	},
+})
+
+var loginInput = graphql.NewInputObject(graphql.InputObjectConfig{
+	Name: "LoginInput",
+	Fields: graphql.InputObjectConfigFieldMap{
+		"username": &graphql.InputObjectFieldConfig{Type: graphql.NewNonNull(graphql.String)},
+		"password": &graphql.InputObjectFieldConfig{Type: graphql.NewNonNull(graphql.String)},
 	},
 })
 
@@ -108,12 +138,39 @@ var queryType = graphql.NewObject(graphql.ObjectConfig{
 				return p.Context.Value("resolver").(*Resolver).getAccessRequests(p.Context, filter)
 			},
 		},
+		"auditLogs": &graphql.Field{
+			Type:        graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(auditLogType))),
+			Description: "Get audit logs for an access request",
+			Args: graphql.FieldConfigArgument{
+				"accessRequestId": &graphql.ArgumentConfig{Type: graphql.NewNonNull(graphql.ID)},
+			},
+			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+				requestID := getRequestID(p.Context)
+				accessRequestID := p.Args["accessRequestId"].(string)
+				log.Info().Str("request_id", requestID).Str("operation", "getAuditLogs").Str("component", "graphql").Msg("fetching audit logs")
+				return p.Context.Value("resolver").(*Resolver).getAuditLogs(p.Context, accessRequestID)
+			},
+		},
 	},
 })
 
 var mutationType = graphql.NewObject(graphql.ObjectConfig{
 	Name: "Mutation",
 	Fields: graphql.Fields{
+		"login": &graphql.Field{
+			Type:        authPayloadType,
+			Description: "Login with username and password",
+			Args: graphql.FieldConfigArgument{
+				"input": &graphql.ArgumentConfig{Type: graphql.NewNonNull(loginInput)},
+			},
+			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+				input := p.Args["input"].(map[string]interface{})
+				username := input["username"].(string)
+				password := input["password"].(string)
+				log.Info().Str("operation", "login").Str("username", username).Str("component", "graphql").Msg("login attempt")
+				return p.Context.Value("resolver").(*Resolver).login(p.Context, username, password)
+			},
+		},
 		"createAccessRequest": &graphql.Field{
 			Type:        accessRequestType,
 			Description: "Create a new access request",
@@ -123,8 +180,9 @@ var mutationType = graphql.NewObject(graphql.ObjectConfig{
 			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 				input := p.Args["input"].(map[string]interface{})
 				requestID := getRequestID(p.Context)
-				log.Info().Str("request_id", requestID).Str("operation", "createAccessRequest").Str("component", "graphql").Msg("creating access request")
-				return p.Context.Value("resolver").(*Resolver).createAccessRequest(p.Context, input)
+				username := auth.GetUsernameFromContext(p.Context)
+				log.Info().Str("request_id", requestID).Str("operation", "createAccessRequest").Str("component", "graphql").Str("username", username).Msg("creating access request")
+				return p.Context.Value("resolver").(*Resolver).createAccessRequest(p.Context, input, username)
 			},
 		},
 		"updateAccessRequestStatus": &graphql.Field{
@@ -136,8 +194,9 @@ var mutationType = graphql.NewObject(graphql.ObjectConfig{
 			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 				input := p.Args["input"].(map[string]interface{})
 				requestID := getRequestID(p.Context)
-				log.Info().Str("request_id", requestID).Str("operation", "updateAccessRequestStatus").Str("component", "graphql").Msg("updating access request status")
-				return p.Context.Value("resolver").(*Resolver).updateAccessRequestStatus(p.Context, input)
+				username := auth.GetUsernameFromContext(p.Context)
+				log.Info().Str("request_id", requestID).Str("operation", "updateAccessRequestStatus").Str("component", "graphql").Str("username", username).Msg("updating access request status")
+				return p.Context.Value("resolver").(*Resolver).updateAccessRequestStatus(p.Context, input, username)
 			},
 		},
 	},
@@ -213,7 +272,35 @@ func (r *Resolver) getAccessRequests(ctx context.Context, filter map[string]inte
 	return results, nil
 }
 
-func (r *Resolver) createAccessRequest(ctx context.Context, input map[string]interface{}) (*models.AccessRequest, error) {
+func (r *Resolver) login(ctx context.Context, username, password string) (map[string]interface{}, error) {
+	var user models.User
+	err := r.DB.Pool.QueryRow(ctx, `
+		SELECT id, username, password_hash FROM users WHERE username = $1
+	`, username).Scan(&user.ID, &user.Username, &user.PasswordHash)
+
+	if err != nil {
+		log.Warn().Str("username", username).Msg("login failed - user not found")
+		return nil, auth.ErrInvalidCredentials
+	}
+
+	if !auth.CheckPassword(password, user.PasswordHash) {
+		log.Warn().Str("username", username).Msg("login failed - invalid password")
+		return nil, auth.ErrInvalidCredentials
+	}
+
+	token, err := auth.GenerateToken(username)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate token: %w", err)
+	}
+
+	log.Info().Str("username", username).Msg("login successful")
+	return map[string]interface{}{
+		"token":    token,
+		"username": username,
+	}, nil
+}
+
+func (r *Resolver) createAccessRequest(ctx context.Context, input map[string]interface{}, createdBy string) (*models.AccessRequest, error) {
 	requestID := getRequestID(ctx)
 	log.Debug().Str("request_id", requestID).Str("operation", "createAccessRequest").Str("component", "db").Msg("inserting into database")
 
@@ -241,23 +328,38 @@ func (r *Resolver) createAccessRequest(ctx context.Context, input map[string]int
 		return nil, fmt.Errorf("failed to create access request: %w", err)
 	}
 
+	_, err = r.DB.Pool.Exec(ctx, `
+		INSERT INTO audit_logs (access_request_id, action, new_value, changed_by, changed_at)
+		VALUES ($1, $2, $3, $4, $5)
+	`, ar.ID, "CREATED", string(ar.Status), createdBy, time.Now())
+
+	if err != nil {
+		log.Warn().Err(err).Str("request_id", requestID).Msg("failed to create audit log for access request creation")
+	}
+
 	return ar, nil
 }
 
-func (r *Resolver) updateAccessRequestStatus(ctx context.Context, input map[string]interface{}) (*models.AccessRequest, error) {
+func (r *Resolver) updateAccessRequestStatus(ctx context.Context, input map[string]interface{}, changedBy string) (*models.AccessRequest, error) {
 	requestID := getRequestID(ctx)
 	log.Debug().Str("request_id", requestID).Str("operation", "updateAccessRequestStatus").Str("component", "db").Msg("updating database")
 
 	id := input["id"].(string)
-	status := input["status"].(models.Status)
+	newStatus := input["status"].(models.Status)
+
+	var oldStatus models.Status
+	err := r.DB.Pool.QueryRow(ctx, `SELECT status FROM access_requests WHERE id = $1`, id).Scan(&oldStatus)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current status: %w", err)
+	}
 
 	ar := &models.AccessRequest{}
-	err := r.DB.Pool.QueryRow(ctx, `
+	err = r.DB.Pool.QueryRow(ctx, `
 		UPDATE access_requests
 		SET status = $1, updated_at = $2
 		WHERE id = $3
 		RETURNING id, request_id, requester, system_resource, access_level, justification, status, created_at, updated_at
-	`, status, time.Now(), id).Scan(
+	`, newStatus, time.Now(), id).Scan(
 		&ar.ID, &ar.RequestID, &ar.Requester, &ar.SystemResource, &ar.AccessLevel, &ar.Justification, &ar.Status, &ar.CreatedAt, &ar.UpdatedAt,
 	)
 
@@ -265,7 +367,51 @@ func (r *Resolver) updateAccessRequestStatus(ctx context.Context, input map[stri
 		return nil, fmt.Errorf("failed to update access request status: %w", err)
 	}
 
+	_, err = r.DB.Pool.Exec(ctx, `
+		INSERT INTO audit_logs (access_request_id, action, old_value, new_value, changed_by, changed_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`, ar.ID, "STATUS_CHANGED", string(oldStatus), string(newStatus), changedBy, time.Now())
+
+	if err != nil {
+		log.Warn().Err(err).Str("request_id", requestID).Msg("failed to create audit log for status change")
+	}
+
 	return ar, nil
+}
+
+func (r *Resolver) getAuditLogs(ctx context.Context, accessRequestID string) ([]*models.AuditLog, error) {
+	requestID := getRequestID(ctx)
+	log.Debug().Str("request_id", requestID).Str("operation", "getAuditLogs").Str("accessRequestId", accessRequestID).Str("component", "db").Msg("querying audit logs")
+
+	rows, err := r.DB.Pool.Query(ctx, `
+		SELECT id, access_request_id, action, old_value, new_value, changed_by, changed_at
+		FROM audit_logs
+		WHERE access_request_id = $1
+		ORDER BY changed_at ASC
+	`, accessRequestID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []*models.AuditLog
+	for rows.Next() {
+		al := &models.AuditLog{}
+		var oldValue, newValue *string
+		err := rows.Scan(&al.ID, &al.AccessRequestID, &al.Action, &oldValue, &newValue, &al.ChangedBy, &al.ChangedAt)
+		if err != nil {
+			return nil, err
+		}
+		if oldValue != nil {
+			al.OldValue = *oldValue
+		}
+		if newValue != nil {
+			al.NewValue = *newValue
+		}
+		results = append(results, al)
+	}
+
+	return results, nil
 }
 
 func getRequestID(ctx context.Context) string {

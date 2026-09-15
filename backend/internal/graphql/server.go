@@ -18,12 +18,23 @@ func NewHandler(database *db.DB) *handler.Handler {
 	return h
 }
 
-func ContextMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if requestID, ok := r.Context().Value("request_id").(string); ok {
-			ctx := context.WithValue(r.Context(), "request_id", requestID)
+func ContextMiddleware(resolver *Resolver) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+
+			if requestID, ok := ctx.Value("request_id").(string); ok {
+				ctx = context.WithValue(ctx, "request_id", requestID)
+			}
+
+			if username, ok := ctx.Value("username").(string); ok {
+				ctx = context.WithValue(ctx, "username", username)
+			}
+
+			ctx = context.WithValue(ctx, "resolver", resolver)
+
 			r = r.WithContext(ctx)
-		}
-		next.ServeHTTP(w, r)
-	})
+			next.ServeHTTP(w, r)
+		})
+	}
 }

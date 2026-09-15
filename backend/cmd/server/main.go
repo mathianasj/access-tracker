@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
+	"github.com/mathianasj/access-tracker/internal/auth"
 	"github.com/mathianasj/access-tracker/internal/db"
 	"github.com/mathianasj/access-tracker/internal/graphql"
 	"github.com/rs/zerolog"
@@ -32,15 +34,17 @@ func main() {
 	defer database.Close()
 
 	graphqlHandler := graphql.NewHandler(database)
+	resolver := graphql.NewResolver(database)
 
 	r := chi.NewRouter()
 
 	r.Use(middleware.Recoverer)
 	r.Use(requestIDMiddleware)
 	r.Use(requestLogger)
+	r.Use(authMiddleware)
 
 	r.Get("/healthz", healthHandler(database))
-	r.Handle("/graphql", graphql.ContextMiddleware(graphqlHandler))
+	r.Handle("/graphql", graphql.ContextMiddleware(resolver)(graphqlHandler))
 
 	logger.Info().Msg("server starting on :8080")
 	http.ListenAndServe(":8080", r)
@@ -121,6 +125,41 @@ func requestLogger(next http.Handler) http.Handler {
 			Str("component", "backend").
 			Str("operation", "http_request").
 			Msg("request")
+	})
+}
+
+func authMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			ctx = context.WithValue(ctx, "username", "anonymous")
+			r = r.WithContext(ctx)
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		if tokenString == authHeader {
+			ctx = context.WithValue(ctx, "username", "anonymous")
+			r = r.WithContext(ctx)
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		claims, err := auth.ValidateToken(tokenString)
+		if err != nil {
+			logger.Warn().Err(err).Str("operation", "auth").Msg("invalid token")
+			ctx = context.WithValue(ctx, "username", "anonymous")
+			r = r.WithContext(ctx)
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		ctx = context.WithValue(ctx, "username", claims.Username)
+		r = r.WithContext(ctx)
+		next.ServeHTTP(w, r)
 	})
 }
 
