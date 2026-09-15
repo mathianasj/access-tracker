@@ -5,10 +5,10 @@
 ```mermaid
 graph LR
     User["👤 Browser"] -->|HTTPS| Ingress["🌐 Ingress"]
-    Ingress -->|/api/*| Backend["⚙️ Go Backend<br/>:8080"]
-    Ingress -->|/*| Frontend["📦 Vue SPA<br/>:80"]
+    Ingress -->|/api/*| Backend["⚙️ Go Backend\n:8080"]
+    Ingress -->|/*| Frontend["📦 Vue SPA\n:80"]
     Frontend -->|GraphQL| Backend
-    Backend -->|SQL| PostgreSQL["🗄️ PostgreSQL<br/>:5432"]
+    Backend -->|SQL| PostgreSQL["🗄️ PostgreSQL\n:5432"]
     GitHubActions["🐙 GitHub Actions"] -->|docker push| Quay["📦 Quay.io"]
     Quay -->|docker pull| K8s["☸️ K8s Cluster"]
     Prometheus["📊 Prometheus"] -->|scrape| Backend
@@ -40,22 +40,22 @@ Access Tracker manages resource access permissions with:
 
 ```mermaid
 flowchart TD
-    subgraph "Frontend Choices"
-        Vue["Vue 3"] --> VueWhy["Component-based SPA<br/>TypeScript support<br/>Fast reactivity"]
-        Apollo["Apollo Client"] --> ApolloWhy["Native GraphQL support<br/>Caching built-in"]
+    subgraph "Frontend"
+        Vue["Vue 3"] --> VueWhy["Component-based SPA\nTypeScript support\nFast reactivity"]
+        Apollo["Apollo Client"] --> ApolloWhy["Native GraphQL support\nCaching built-in"]
     end
 
-    subgraph "Backend Choices"
-        Go["Go"] --> GoWhy["Single binary<br/>Fast startup<br/>Native concurrency"]
-        Chi["Chi Router"] --> ChiWhy["Lightweight<br/>Standard library compatible"]
-        GraphQL["GraphQL"] --> GraphQLWhy["Flexible queries<br/>Single endpoint<br/>Schema-first"]
+    subgraph "Backend"
+        Go["Go"] --> GoWhy["Single binary\nFast startup\nNative concurrency"]
+        Chi["Chi Router"] --> ChiWhy["Lightweight\nStandard library"]
+        GraphQL["GraphQL"] --> GraphQLWhy["Flexible queries\nSingle endpoint\nSchema-first"]
     end
 
-    subgraph "Infrastructure Choices"
-        K8s["Kubernetes"] --> K8sWhy["Auto-scaling<br/>Self-healing<br/>Rolling updates"]
-        Helm["Helm"] --> HelmWhy["Versioned configs<br/>Environment promotion"]
-        PostgreSQL["PostgreSQL"] --> PGWhy["ACID compliant<br/>Bitnami chart<br/>JSON support"}
-        Quay["Quay.io"] --> QuayWhy["Image scanning<br/>GitHub integration"]
+    subgraph "Infrastructure"
+        K8s["Kubernetes"] --> K8sWhy["Auto-scaling\nSelf-healing\nRolling updates"]
+        Helm["Helm"] --> HelmWhy["Versioned configs\nEnvironment promotion"]
+        PostgreSQL["PostgreSQL"] --> PGWhy["ACID compliant\nBitnami chart\nJSON support"]
+        Quay["Quay.io"] --> QuayWhy["Image scanning\nGitHub integration"]
     end
 ```
 
@@ -303,7 +303,7 @@ flowchart TD
     subgraph "10x Scale"
         BE2["⚙️ Backend x8"]
         FE2["📦 Frontend x4"]
-        DB2["🗄️ PostgreSQL<br/>+ 2 Read Replicas"]
+        DB2["🗄️ PostgreSQL\n+ 2 Read Replicas"]
         Cache["💨 Redis Cache"]
         LB["⚖️ Load Balancer"]
     end
@@ -355,9 +355,9 @@ flowchart LR
     end
 
     subgraph "With SSO"
-        Keycloak["🔐 Keycloak<br/>OIDC Provider"]
-        FE2["📦 Frontend +<br/>oidc-client"]
-        BE2["⚙️ Backend +<br/>JWT Validation"]
+        Keycloak["🔐 Keycloak\nOIDC Provider"]
+        FE2["📦 Frontend +\noidc-client"]
+        BE2["⚙️ Backend +\nJWT Validation"]
     end
 
     User["👤 User"] -->|Login| Keycloak
