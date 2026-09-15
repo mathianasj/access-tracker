@@ -65,8 +65,8 @@ jobs:
 
       - name: Lint
         run: |
-          echo "$HOME/go/bin" >> $GITHUB_PATH
-          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.5
+          export PATH="$PATH:$(go env GOPATH)/bin"
           golangci-lint run ./...
 
       - name: Test
