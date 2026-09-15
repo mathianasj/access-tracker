@@ -1,19 +1,5 @@
 # Access Tracker Architecture
 
-## Demo Presentation Guide
-
-This document is structured to support a **15-20 minute technical presentation**:
-
-| Section | Time | Rubric Point | Doc Section |
-|---------|------|--------------|-------------|
-| 1. Architecture Overview | 2-4 min | What talks to what, why these tools | [Architecture Overview](#1-architecture-overview-2-4-min) |
-| 2. Live Walkthrough | 3-5 min | Trace request end-to-end | [Live Walkthrough](#2-live-walkthrough-3-5-min) |
-| 3. Deployment Narrative | 3-5 min | What broke and how to diagnose | [Deployment Narrative](#3-deployment-narrative-3-5-min) |
-| 4. Monitoring Demo | 2-4 min | Where to look if something broke | [Monitoring Demo](#4-monitoring-demo-2-4-min) |
-| 5. Forward-Looking | 2-4 min | Scale 10x, SSO, multi-region | [Forward-Looking](#5-forward-looking-2-4-min) |
-
----
-
 ## Quick Reference: What Talks to What
 
 ```mermaid
