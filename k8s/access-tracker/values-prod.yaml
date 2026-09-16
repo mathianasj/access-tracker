@@ -29,7 +29,7 @@ postgresql:
   auth:
     database: access_tracker
     username: access_tracker
-    password: ""
+    password: "access_tracker_password"
   primary:
     persistence:
       enabled: true
