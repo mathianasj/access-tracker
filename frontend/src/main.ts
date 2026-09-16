@@ -4,10 +4,11 @@ import './style.css';
 import App from './App.vue';
 import { router } from './router';
 import { apolloClient } from './apollo';
+import { DefaultApolloClient } from '@vue/apollo-composable';
 
 const app = createApp(App);
 
-app.config.globalProperties.$apollo = apolloClient;
+app.provide(DefaultApolloClient, apolloClient);
 app.use(createPinia());
 app.use(router);
 
