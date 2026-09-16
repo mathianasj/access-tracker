@@ -14,8 +14,7 @@ FROM alpine:3.19
 
 RUN apk add --no-cache nginx
 
-RUN mkdir -p /run/nginx /var/cache/nginx /var/log/nginx /var/lib/nginx/tmp /var/lib/nginx/logs /etc/nginx/conf.d && \
-    chmod -R 777 /run/nginx /var/cache/nginx /var/log/nginx /var/lib/nginx
+RUN mkdir -p /tmp/nginx /tmp/nginx/client_body /etc/nginx/conf.d
 
 COPY --from=builder /build/dist /usr/share/nginx/html
 
@@ -23,8 +22,7 @@ RUN echo 'daemon off;' > /etc/nginx/nginx.conf
 
 RUN cat > /etc/nginx/httpd.conf <<'EOF'
 worker_processes auto;
-error_log /var/log/nginx/error.log warn;
-pid /run/nginx.pid;
+error_log /dev/stderr warn;
 
 events {
     worker_connections 1024;
@@ -38,7 +36,7 @@ http {
                       '$status $body_bytes_sent "$http_referer" '
                       '$http_user_agent';
 
-    access_log /var/log/nginx/access.log main;
+    access_log /dev/stdout main;
     sendfile on;
     tcp_nopush on;
     keepalive_timeout 65;
