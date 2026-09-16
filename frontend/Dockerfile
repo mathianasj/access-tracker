@@ -14,7 +14,8 @@ FROM alpine:3.19
 
 RUN apk add --no-cache nginx
 
-RUN mkdir -p /run/nginx /var/cache/nginx /var/log/nginx /var/lib/nginx/tmp /etc/nginx/conf.d
+RUN mkdir -p /run/nginx /var/cache/nginx /var/log/nginx /var/lib/nginx/tmp /var/lib/nginx/logs /etc/nginx/conf.d && \
+    chmod -R 777 /run/nginx /var/cache/nginx /var/log/nginx /var/lib/nginx
 
 COPY --from=builder /build/dist /usr/share/nginx/html
 
