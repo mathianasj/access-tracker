@@ -14,16 +14,14 @@ FROM alpine:3.19
 
 RUN apk add --no-cache nginx
 
-# Create nginx directories
-RUN mkdir -p /run/nginx /var/cache/nginx /var/log/nginx && \
-    chown -R nginx:nginx /run/nginx /var/cache/nginx /var/log/nginx
+RUN mkdir -p /run/nginx /var/cache/nginx /var/log/nginx /etc/nginx/conf.d
 
-# Copy built assets
 COPY --from=builder /build/dist /usr/share/nginx/html
 
-# Write nginx config
-RUN echo 'daemon off;' > /etc/nginx/nginx.conf && \
-    echo 'user nginx;
+RUN echo 'daemon off;' > /etc/nginx/nginx.conf
+
+RUN cat > /etc/nginx/httpd.conf <<'EOF'
+user nginx;
 worker_processes auto;
 error_log /var/log/nginx/error.log warn;
 pid /run/nginx.pid;
@@ -36,12 +34,11 @@ http {
     include /etc/nginx/mime.types;
     default_type application/octet-stream;
 
-    log_format main '"'"'$remote_addr - $remote_user [$time_local] "$request" '"'"',
-                      '"'"'$status $body_bytes_sent "$http_referer" '"'"',
-                      '"'"'$http_user_agent'"'"';
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '$http_user_agent';
 
     access_log /var/log/nginx/access.log main;
-
     sendfile on;
     tcp_nopush on;
     keepalive_timeout 65;
@@ -49,7 +46,6 @@ http {
     server {
         listen 80;
         server_name _;
-
         root /usr/share/nginx/html;
         index index.html;
 
@@ -64,15 +60,17 @@ http {
         }
 
         location /healthz {
-            return 200 "healthy\n";
+            return 200 "healthy";
             add_header Content-Type text/plain;
         }
     }
-}' > /etc/nginx/httpd.conf && \
-    echo 'server {
+}
+EOF
+
+RUN cat > /etc/nginx/conf.d/default.conf <<'EOF'
+server {
     listen 8080;
     server_name _;
-
     root /usr/share/nginx/html;
     index index.html;
 
@@ -87,14 +85,14 @@ http {
     }
 
     location /healthz {
-        return 200 "healthy\n";
+        return 200 "healthy";
         add_header Content-Type text/plain;
     }
-}' > /etc/nginx/conf.d/default.conf
+}
+EOF
 
 EXPOSE 80 8080
 
-# Create healthz file
 RUN echo 'healthy' > /usr/share/nginx/html/healthz
 
 CMD ["nginx", "-c", "/etc/nginx/httpd.conf"]
