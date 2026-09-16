@@ -1,24 +1,31 @@
-{{- if .Values.ingress.enabled -}}
+{{- if and .Values.ingress.enabled (not .Values.route.enabled) }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{ include "access-tracker.fullname" . }}
   labels:
     {{- include "access-tracker.labels" . | nindent 4 }}
+  {{- if .Values.ingress.tls.certManager.enabled }}
   annotations:
     cert-manager.io/cluster-issuer: {{ .Values.ingress.tls.clusterIssuer }}
     nginx.ingress.kubernetes.io/rewrite-target: /
+  {{- end }}
 spec:
+  {{- if .Values.ingress.className }}
   ingressClassName: {{ .Values.ingress.className }}
-  {{- if .Values.ingress.tls.enabled }}
+  {{- end }}
+  {{- if and .Values.ingress.tls.enabled .Values.ingress.host }}
   tls:
     - hosts:
         - {{ .Values.ingress.host }}
       secretName: {{ include "access-tracker.fullname" . }}-tls
   {{- end }}
   rules:
+    {{- if .Values.ingress.host }}
     - host: {{ .Values.ingress.host | quote }}
-      http:
+    {{- else }}
+    - http:
+    {{- end }}
         paths:
           - path: /api
             pathType: Prefix

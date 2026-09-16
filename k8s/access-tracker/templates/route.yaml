@@ -1,0 +1,33 @@
+{{- if .Values.route.enabled -}}
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ include "access-tracker.fullname" . }}
+  labels:
+    {{- include "access-tracker.labels" . | nindent 4 }}
+  annotations:
+    {{- if .Values.route.tls.terminate }}
+    route.openshift.io/termination: {{ .Values.route.tls.terminate }}
+    {{- end }}
+spec:
+  {{- if .Values.route.host }}
+  host: {{ .Values.route.host }}
+  {{- end }}
+  to:
+    kind: Service
+    name: {{ include "access-tracker.fullname" . }}-frontend
+    weight: 100
+  {{- if .Values.route.tls.enabled }}
+  tls:
+    termination: {{ .Values.route.tls.terminate | default "edge" }}
+    insecureEdgeTerminationPolicy: {{ .Values.route.tls.insecureEdgeTerminationPolicy | default "Redirect" }}
+  {{- end }}
+  {{- if .Values.route.paths }}
+  {{- range .Values.route.paths }}
+ AlternateBackends:
+    - kind: Service
+      name: {{ .name }}
+      weight: {{ .weight }}
+  {{- end }}
+  {{- end }}
+{{- end }}

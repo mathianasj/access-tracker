@@ -51,12 +51,20 @@ service:
     type: ClusterIP
 
 ingress:
-  enabled: true
+  enabled: false
   className: nginx
   host: access-tracker.example.com
   tls:
     enabled: true
     clusterIssuer: letsencrypt-prod
+
+route:
+  enabled: true
+  host: ""
+  tls:
+    enabled: true
+    terminate: edge
+    insecureEdgeTerminationPolicy: Redirect
 
 autoscaling:
   enabled: true

@@ -32,6 +32,17 @@ ingress:
   tls:
     enabled: true
     clusterIssuer: letsencrypt-prod
+    certManager:
+      enabled: true
+
+route:
+  enabled: false
+  host: ""
+  tls:
+    enabled: true
+    terminate: edge
+    insecureEdgeTerminationPolicy: Redirect
+  paths: []
 
 monitoring:
   enabled: false
