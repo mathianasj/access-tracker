@@ -15,7 +15,13 @@ type DB struct {
 func New(ctx context.Context) (*DB, error) {
 	connString := os.Getenv("DATABASE_URL")
 	if connString == "" {
-		connString = "postgres://postgres:postgres@localhost:5432/access_tracker?sslmode=disable"
+		host := getEnvOrDefault("DB_HOST", "localhost")
+		port := getEnvOrDefault("DB_PORT", "5432")
+		user := getEnvOrDefault("DB_USER", "postgres")
+		password := os.Getenv("DB_PASSWORD")
+		dbname := getEnvOrDefault("DB_NAME", "access_tracker")
+		sslmode := getEnvOrDefault("DB_SSLMODE", "disable")
+		connString = fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s", user, password, host, port, dbname, sslmode)
 	}
 
 	pool, err := pgxpool.New(ctx, connString)
@@ -32,6 +38,13 @@ func New(ctx context.Context) (*DB, error) {
 	}
 
 	return &DB{Pool: pool}, nil
+}
+
+func getEnvOrDefault(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
 }
 
 func (db *DB) Close() {
