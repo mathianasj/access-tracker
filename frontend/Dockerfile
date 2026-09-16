@@ -28,6 +28,11 @@ RUN rm -f /etc/nginx/conf.d/default.conf && \
             proxy_set_header Host $host; \
             proxy_set_header X-Real-IP $remote_addr; \
         } \
+        location /graphql { \
+            proxy_pass http://access-tracker-backend:8080/graphql; \
+            proxy_set_header Host $host; \
+            proxy_set_header X-Real-IP $remote_addr; \
+        } \
         location /healthz { \
             return 200 "healthy"; \
             add_header Content-Type text/plain; \
