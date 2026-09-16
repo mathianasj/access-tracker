@@ -14,14 +14,13 @@ FROM alpine:3.19
 
 RUN apk add --no-cache nginx
 
-RUN mkdir -p /run/nginx /var/cache/nginx /var/log/nginx /etc/nginx/conf.d
+RUN mkdir -p /run/nginx /var/cache/nginx /var/log/nginx /var/lib/nginx/tmp /etc/nginx/conf.d
 
 COPY --from=builder /build/dist /usr/share/nginx/html
 
 RUN echo 'daemon off;' > /etc/nginx/nginx.conf
 
 RUN cat > /etc/nginx/httpd.conf <<'EOF'
-user nginx;
 worker_processes auto;
 error_log /var/log/nginx/error.log warn;
 pid /run/nginx.pid;
