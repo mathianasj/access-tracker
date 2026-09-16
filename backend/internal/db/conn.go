@@ -27,6 +27,10 @@ func New(ctx context.Context) (*DB, error) {
 		return nil, fmt.Errorf("unable to ping database: %w", err)
 	}
 
+	if err := RunMigrations(ctx, pool); err != nil {
+		return nil, fmt.Errorf("failed to run migrations: %w", err)
+	}
+
 	return &DB{Pool: pool}, nil
 }
 
