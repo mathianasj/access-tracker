@@ -328,6 +328,18 @@ func (r *Resolver) createAccessRequest(ctx context.Context, input map[string]int
 		return nil, fmt.Errorf("failed to create access request: %w", err)
 	}
 
+	log.Info().
+		Str("action", "ACCESS_REQUEST_CREATED").
+		Str("request_id", requestID).
+		Str("access_request_id", ar.ID).
+		Str("requester", ar.Requester).
+		Str("system_resource", ar.SystemResource).
+		Str("access_level", string(ar.AccessLevel)).
+		Str("status", string(ar.Status)).
+		Str("changed_by", createdBy).
+		Time("timestamp", ar.CreatedAt).
+		Msg("audit")
+
 	_, err = r.DB.Pool.Exec(ctx, `
 		INSERT INTO audit_logs (access_request_id, action, new_value, changed_by, changed_at)
 		VALUES ($1, $2, $3, $4, $5)
@@ -366,6 +378,18 @@ func (r *Resolver) updateAccessRequestStatus(ctx context.Context, input map[stri
 	if err != nil {
 		return nil, fmt.Errorf("failed to update access request status: %w", err)
 	}
+
+	log.Info().
+		Str("action", "STATUS_CHANGED").
+		Str("request_id", requestID).
+		Str("access_request_id", ar.ID).
+		Str("requester", ar.Requester).
+		Str("system_resource", ar.SystemResource).
+		Str("old_status", string(oldStatus)).
+		Str("new_status", string(newStatus)).
+		Str("changed_by", changedBy).
+		Time("timestamp", time.Now()).
+		Msg("audit")
 
 	_, err = r.DB.Pool.Exec(ctx, `
 		INSERT INTO audit_logs (access_request_id, action, old_value, new_value, changed_by, changed_at)
