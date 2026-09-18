@@ -68,8 +68,8 @@ jobs:
       - name: Install dependencies
         uses: nick-fields/retry@v3
         with:
-          attempt_limit: 3
-          wait_seconds: 10
+          max_attempts: 3
+          retry_wait_seconds: 10
           command: npm ci
 
       - name: Type check
