@@ -177,16 +177,23 @@ func authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
+		tokenString := ""
+
 		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
-			ctx = context.WithValue(ctx, "username", "anonymous")
-			r = r.WithContext(ctx)
-			next.ServeHTTP(w, r)
-			return
+		if authHeader != "" {
+			tokenString = strings.TrimPrefix(authHeader, "Bearer ")
+			if tokenString == authHeader {
+				tokenString = ""
+			}
 		}
 
-		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-		if tokenString == authHeader {
+		if tokenString == "" {
+			if cookie, err := r.Cookie("auth_token"); err == nil {
+				tokenString = cookie.Value
+			}
+		}
+
+		if tokenString == "" {
 			ctx = context.WithValue(ctx, "username", "anonymous")
 			r = r.WithContext(ctx)
 			next.ServeHTTP(w, r)
