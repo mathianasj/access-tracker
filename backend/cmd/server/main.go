@@ -47,6 +47,7 @@ func main() {
 	r.Get("/healthz", healthHandler(database))
 	r.Get("/me", meHandler())
 	r.Get("/token", tokenHandler())
+	r.Post("/logout", logoutHandler())
 	r.Handle("/graphql", graphql.ContextMiddleware(resolver)(graphqlHandler))
 
 	r.Get("/oauth/github", githubOAuthHandler(database))
@@ -132,6 +133,23 @@ func tokenHandler() http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]string{"token": tokenString, "username": username.(string)})
+	}
+}
+
+func logoutHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		http.SetCookie(w, &http.Cookie{
+			Name:     "auth_token",
+			Value:    "",
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteLaxMode,
+			Path:     "/",
+			MaxAge:   -1,
+		})
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"success": "true"})
 	}
 }
 

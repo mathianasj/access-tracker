@@ -5,7 +5,12 @@ import { useRouter } from 'vue-router';
 const authStore = useAuthStore();
 const router = useRouter();
 
-function logout() {
+async function logout() {
+  try {
+    await fetch('/logout', { method: 'POST' });
+  } catch (e) {
+    console.error('Logout failed:', e);
+  }
   authStore.logout();
   router.push('/login');
 }
