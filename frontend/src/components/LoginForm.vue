@@ -25,7 +25,7 @@ const loading = ref(false);
 
 const { mutate: login } = useMutation(LOGIN_MUTATION);
 
-onMounted(() => {
+onMounted(async () => {
   const errorParam = route.query.error as string;
   if (errorParam) {
     const errorMessages: Record<string, string> = {
@@ -41,10 +41,22 @@ onMounted(() => {
 
   const oauthSuccess = route.query.oauth as string;
   if (oauthSuccess === 'success') {
-    router.push('/requests');
+    const authenticated = await authStore.checkAuth();
+    if (authenticated) {
+      router.push('/requests');
+    } else {
+      error.value = 'OAuth login failed. Please try again.';
+    }
+    return;
   }
 
   if (authStore.isAuthenticated) {
+    router.push('/requests');
+    return;
+  }
+
+  const hasToken = await authStore.checkAuth();
+  if (hasToken) {
     router.push('/requests');
   }
 });

@@ -45,6 +45,8 @@ func main() {
 	r.Use(authMiddleware)
 
 	r.Get("/healthz", healthHandler(database))
+	r.Get("/me", meHandler())
+	r.Get("/token", tokenHandler())
 	r.Handle("/graphql", graphql.ContextMiddleware(resolver)(graphqlHandler))
 
 	r.Get("/oauth/github", githubOAuthHandler(database))
@@ -91,6 +93,45 @@ func healthHandler(database *db.DB) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(response)
+	}
+}
+
+func meHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		username := r.Context().Value("username")
+		if username == nil || username == "anonymous" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]string{"error": "not authenticated"})
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"username": username.(string)})
+	}
+}
+
+func tokenHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		username := r.Context().Value("username")
+		if username == nil || username == "anonymous" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]string{"error": "not authenticated"})
+			return
+		}
+
+		tokenString, err := auth.GenerateToken(username.(string))
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": "failed to generate token"})
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"token": tokenString, "username": username.(string)})
 	}
 }
 

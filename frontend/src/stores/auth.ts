@@ -7,6 +7,21 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isAuthenticated = computed(() => !!token.value);
 
+  async function checkAuth() {
+    try {
+      const response = await fetch('/token');
+      if (response.ok) {
+        const data = await response.json();
+        setToken(data.token);
+        setUser(data.username);
+        return true;
+      }
+    } catch (e) {
+      console.error('Failed to check auth:', e);
+    }
+    return false;
+  }
+
   function setToken(newToken: string) {
     token.value = newToken;
     localStorage.setItem('auth_token', newToken);
@@ -32,6 +47,7 @@ export const useAuthStore = defineStore('auth', () => {
     token,
     username,
     isAuthenticated,
+    checkAuth,
     setToken,
     setUser,
     logout,
