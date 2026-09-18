@@ -1,6 +1,6 @@
 module github.com/mathianasj/access-tracker
 
-go 1.26
+go 1.26.0
 
 require (
 	github.com/go-chi/chi/v5 v5.3.2
@@ -11,6 +11,7 @@ require (
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/rs/zerolog v1.33.0
 	golang.org/x/crypto v0.31.0
+	golang.org/x/oauth2 v0.37.0
 )
 
 require (

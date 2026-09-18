@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -45,6 +46,9 @@ func main() {
 
 	r.Get("/healthz", healthHandler(database))
 	r.Handle("/graphql", graphql.ContextMiddleware(resolver)(graphqlHandler))
+
+	r.Get("/oauth/github", githubOAuthHandler(database))
+	r.Get("/oauth/github/callback", githubOAuthCallbackHandler(database))
 
 	logger.Info().Msg("server starting on :8080")
 	http.ListenAndServe(":8080", r)
@@ -168,4 +172,108 @@ func getRequestID(ctx context.Context) string {
 		return requestID
 	}
 	return "unknown"
+}
+
+func githubOAuthHandler(database *db.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		requestID := getRequestID(r.Context())
+		state := auth.GenerateOAuthState()
+
+		http.SetCookie(w, &http.Cookie{
+			Name:     "oauth_state",
+			Value:    state,
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteLaxMode,
+			Path:     "/",
+			MaxAge:   600,
+		})
+
+		url := auth.GitHubOAuth.GenerateAuthURL(state)
+		logger.Info().Str("request_id", requestID).Str("redirect_url", url).Msg("oauth_github_initiated")
+		http.Redirect(w, r, url, http.StatusTemporaryRedirect)
+	}
+}
+
+func githubOAuthCallbackHandler(database *db.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		requestID := getRequestID(r.Context())
+		ctx := r.Context()
+
+		stateCookie, err := r.Cookie("oauth_state")
+		if err != nil || stateCookie == nil {
+			logger.Warn().Str("request_id", requestID).Msg("oauth_state_cookie_missing")
+			http.Redirect(w, r, "/?error=oauth_state_missing", http.StatusTemporaryRedirect)
+			return
+		}
+
+		state := r.URL.Query().Get("state")
+		if state != stateCookie.Value {
+			logger.Warn().Str("request_id", requestID).Msg("oauth_state_mismatch")
+			http.Redirect(w, r, "/?error=oauth_state_mismatch", http.StatusTemporaryRedirect)
+			return
+		}
+
+		code := r.URL.Query().Get("code")
+		if code == "" {
+			logger.Warn().Str("request_id", requestID).Msg("oauth_code_missing")
+			http.Redirect(w, r, "/?error=oauth_code_missing", http.StatusTemporaryRedirect)
+			return
+		}
+
+		token, err := auth.GitHubOAuth.ExchangeCode(ctx, code)
+		if err != nil {
+			auth.LogOAuthAttempt("github", "", false, err)
+			logger.Error().Str("request_id", requestID).Err(err).Msg("oauth_token_exchange_failed")
+			http.Redirect(w, r, "/?error=token_exchange_failed", http.StatusTemporaryRedirect)
+			return
+		}
+
+		githubUser, err := auth.GitHubOAuth.GetUser(ctx, token)
+		if err != nil {
+			auth.LogOAuthAttempt("github", "", false, err)
+			logger.Error().Str("request_id", requestID).Err(err).Msg("oauth_get_user_failed")
+			http.Redirect(w, r, "/?error=get_user_failed", http.StatusTemporaryRedirect)
+			return
+		}
+
+		username := githubUser.Login
+		if githubUser.Email != "" {
+			username = githubUser.Email
+		}
+
+		jwtToken, err := auth.GenerateToken(username)
+		if err != nil {
+			auth.LogOAuthAttempt("github", username, false, err)
+			logger.Error().Str("request_id", requestID).Err(err).Msg("jwt_generation_failed")
+			http.Redirect(w, r, "/?error=jwt_generation_failed", http.StatusTemporaryRedirect)
+			return
+		}
+
+		err = database.LinkOAuthUser(ctx, "github", fmt.Sprintf("%d", githubUser.ID), username, string(token.AccessToken))
+		if err != nil {
+			logger.Warn().Str("request_id", requestID).Err(err).Msg("failed to link oauth user, continuing anyway")
+		}
+
+		auth.LogOAuthAttempt("github", username, true, nil)
+
+		http.SetCookie(w, &http.Cookie{
+			Name:     "auth_token",
+			Value:    jwtToken,
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteLaxMode,
+			Path:     "/",
+			MaxAge:   86400 * 7,
+		})
+
+		http.SetCookie(w, &http.Cookie{
+			Name:   "oauth_state",
+			Value:  "",
+			MaxAge: -1,
+			Path:   "/",
+		})
+
+		http.Redirect(w, r, "/?oauth=success", http.StatusTemporaryRedirect)
+	}
 }

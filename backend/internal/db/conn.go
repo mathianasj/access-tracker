@@ -54,3 +54,14 @@ func (db *DB) Close() {
 func (db *DB) Ping(ctx context.Context) error {
 	return db.Pool.Ping(ctx)
 }
+
+func (db *DB) LinkOAuthUser(ctx context.Context, provider, oauthID, username, token string) error {
+	_, err := db.Pool.Exec(ctx, `
+		INSERT INTO users (username, oauth_provider, oauth_id, oauth_token)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (oauth_provider, oauth_id) DO UPDATE SET
+			oauth_token = EXCLUDED.oauth_token,
+			updated_at = NOW()
+	`, username, provider, oauthID, token)
+	return err
+}
