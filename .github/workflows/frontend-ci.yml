@@ -71,7 +71,7 @@ jobs:
           timeout_minutes: 5
           max_attempts: 3
           retry_wait_seconds: 10
-          command: npm ci
+          command: npm install
 
       - name: Type check
         run: npm run build
