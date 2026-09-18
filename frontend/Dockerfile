@@ -27,16 +27,31 @@ RUN rm -f /etc/nginx/conf.d/default.conf && \
             proxy_pass http://access-tracker-backend:8080/; \
             proxy_set_header Host $host; \
             proxy_set_header X-Real-IP $remote_addr; \
+            proxy_pass_header Set-Cookie; \
         } \
         location /graphql { \
             proxy_pass http://access-tracker-backend:8080/graphql; \
             proxy_set_header Host $host; \
             proxy_set_header X-Real-IP $remote_addr; \
+            proxy_pass_header Set-Cookie; \
         } \
         location /oauth/ { \
             proxy_pass http://access-tracker-backend:8080/oauth/; \
             proxy_set_header Host $host; \
             proxy_set_header X-Real-IP $remote_addr; \
+            proxy_pass_header Set-Cookie; \
+        } \
+        location /token { \
+            proxy_pass http://access-tracker-backend:8080/token; \
+            proxy_set_header Host $host; \
+            proxy_set_header X-Real-IP $remote_addr; \
+            proxy_pass_header Set-Cookie; \
+        } \
+        location /me { \
+            proxy_pass http://access-tracker-backend:8080/me; \
+            proxy_set_header Host $host; \
+            proxy_set_header X-Real-IP $remote_addr; \
+            proxy_pass_header Set-Cookie; \
         } \
         location /healthz { \
             return 200 "healthy"; \
