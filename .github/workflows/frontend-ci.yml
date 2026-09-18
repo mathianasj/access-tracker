@@ -66,7 +66,11 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        uses: nick-fields/retry@v3
+        with:
+          attempt_limit: 3
+          wait_seconds: 10
+          command: npm ci
 
       - name: Type check
         run: npm run build
